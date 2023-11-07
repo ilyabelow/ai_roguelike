@@ -126,6 +126,86 @@ public:
   void act(float/* dt*/, flecs::world &ecs, flecs::entity entity) const override {}
 };
 
+class HealState : public State
+{
+private:
+  float heal_speed;
+public:
+  HealState(float heal_speed) : heal_speed(heal_speed) {}
+  void enter() const override {}
+  void exit() const override {}
+  void act(float/* dt*/, flecs::world &ecs, flecs::entity entity) const override {
+    entity.set([&](Hitpoints &hitpoints, Action &a)
+    {
+      a.action = EA_HEAL; // not required
+      hitpoints.hitpoints += heal_speed; 
+    });
+  }
+};
+
+class FindMasterState : public State
+{
+public:
+  void enter() const override {}
+  void exit() const override {}
+  void act(float/* dt*/, flecs::world &ecs, flecs::entity entity) const override {
+    entity.set([&](const Position pos, const Team team){
+      flecs::entity closest_ally;
+      float min_dist = MAXFLOAT;
+      ecs.query<const Position, const Team>().each([&](flecs::entity other_entity, const Position other_pos, const Team other_team){
+        if (other_entity == entity)
+          return;
+        if (team.team == other_team.team && dist(pos, other_pos) < min_dist) {
+          min_dist = dist(pos, other_pos);
+          closest_ally = other_entity;
+        }
+      });
+      if (min_dist < MAXFLOAT) {
+        entity.set<Master>({closest_ally});
+      }
+    });
+  }
+};
+
+
+class MoveToAllyState : public State
+{
+public:
+  void enter() const override {}
+  void exit() const override {}
+  void act(float/* dt*/, flecs::world &ecs, flecs::entity entity) const override
+  {
+    entity.set([&](const Master master, const Position pos, Action& action){
+      master.master.get([&](const Position master_pos){
+        action.action = move_towards(pos, master_pos);
+      });
+    });
+  }
+};
+
+
+class HealMasterState : public State
+{
+private:
+  float heal_amount;
+public:
+  HealMasterState(float heal_amount) : heal_amount(heal_amount) {}
+  void enter() const override {}
+  void exit() const override {}
+  void act(float/* dt*/, flecs::world &ecs, flecs::entity entity) const override {
+    entity.set([&](Action &a, Master master, HealCooldown& cooldown)
+    {
+      if (cooldown.turns_left > 0)
+        return;
+      cooldown.turns_left = cooldown.recharge_turns;
+      a.action = EA_HEAL; // not required ig
+      master.master.set([&](Hitpoints &hitpoints){
+        hitpoints.hitpoints += heal_amount; 
+      });
+    });
+  }
+};
+
 class EnemyAvailableTransition : public StateTransition
 {
   float triggerDist;
@@ -205,6 +285,47 @@ public:
   }
 };
 
+class HasMasterTransition : public StateTransition
+{
+public:
+  bool isAvailable(flecs::world &ecs, flecs::entity entity) const override
+  {
+    return entity.has<Master>();
+  }
+};
+
+class MasterHitpointsLessThanTransition : public StateTransition
+{
+  float threshold;
+public:
+  MasterHitpointsLessThanTransition(float in_thres) : threshold(in_thres) {}
+  bool isAvailable(flecs::world &ecs, flecs::entity entity) const override
+  {   
+    bool hitpointsThresholdReached = false;
+
+    entity.set([&](Master master){
+      master.master.get([&](const Hitpoints &hp)  {
+        hitpointsThresholdReached |= hp.hitpoints < threshold;
+      });
+    });
+
+    return hitpointsThresholdReached;
+  }
+};
+
+
+class HealCooledDownTransition : public StateTransition
+{
+public:
+  bool isAvailable(flecs::world &ecs, flecs::entity entity) const override
+  {
+    bool cooled = false;
+    entity.set([&](const HealCooldown cooldown){
+      cooled = cooldown.turns_left == 0;
+    });
+    return cooled;
+  }
+};
 
 // states
 State *create_attack_enemy_state()
@@ -232,6 +353,26 @@ State *create_nop_state()
   return new NopState();
 }
 
+State *create_heal_state(float heal_speed)
+{
+  return new HealState(heal_speed);
+}
+
+State *create_find_master_state()
+{
+  return new FindMasterState();
+}
+
+State *create_move_to_ally_state()
+{
+  return new MoveToAllyState();
+}
+
+State *create_heal_master_state(float heal_amount)
+{
+  return new HealMasterState(heal_amount);
+}
+
 // transitions
 StateTransition *create_enemy_available_transition(float dist)
 {
@@ -257,3 +398,17 @@ StateTransition *create_and_transition(StateTransition *lhs, StateTransition *rh
   return new AndTransition(lhs, rhs);
 }
 
+StateTransition *create_has_master_transition()
+{
+  return new HasMasterTransition();
+}
+
+StateTransition *create_master_hitpoints_less_than_transition(float thres)
+{
+  return new MasterHitpointsLessThanTransition(thres);
+}
+
+
+StateTransition *create_heal_cooleddown_transition() {
+  return new HealCooledDownTransition();
+}

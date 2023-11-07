@@ -44,6 +44,138 @@ static void add_attack_sm(flecs::entity entity)
   });
 }
 
+
+static void add_berserk_sm(flecs::entity entity)
+{
+  entity.get([](StateMachine &sm)
+  {
+    int patrol = sm.addState(create_patrol_state(3.f));
+    int moveToEnemy = sm.addState(create_move_to_enemy_state());
+    int moveToEnemyUnconditional = sm.addState(create_move_to_enemy_state());
+
+    // high health transition
+    sm.addTransition(create_enemy_available_transition(3.f),
+                     patrol,
+                     moveToEnemy);
+    sm.addTransition(create_negate_transition(
+                      create_enemy_available_transition(5.f)
+                    ),
+                    moveToEnemy,
+                    patrol);
+    // low health transition
+    sm.addTransition(create_hitpoints_less_than_transition(60.f), 
+                     moveToEnemy,
+                     moveToEnemyUnconditional);
+    // technically not needed since we don't have range weapons
+    sm.addTransition(create_hitpoints_less_than_transition(60.f),
+                     patrol,
+                     moveToEnemyUnconditional);
+  });
+}
+
+
+static void add_healing_sm(flecs::entity entity)
+{
+  entity.get([](StateMachine &sm)
+  {
+    int patrol = sm.addState(create_patrol_state(3.f));
+    int moveToEnemy = sm.addState(create_move_to_enemy_state());
+    int fleeFromEnemy = sm.addState(create_flee_from_enemy_state());
+    int heal = sm.addState(create_heal_state(10.));
+
+    sm.addTransition(create_enemy_available_transition(3.f), patrol, moveToEnemy);
+    sm.addTransition(create_negate_transition(create_enemy_available_transition(5.f)), moveToEnemy, patrol);
+
+    sm.addTransition(create_and_transition(create_hitpoints_less_than_transition(60.f), create_enemy_available_transition(5.f)),
+                     moveToEnemy, fleeFromEnemy);
+    sm.addTransition(create_and_transition(create_hitpoints_less_than_transition(60.f), create_enemy_available_transition(3.f)),
+                     patrol, fleeFromEnemy);
+
+    sm.addTransition(create_negate_transition(create_enemy_available_transition(7.f)), fleeFromEnemy, heal);
+
+    // fully healed -> continue to attack
+    sm.addTransition(
+      create_and_transition(
+        create_enemy_available_transition(3.f), 
+        create_negate_transition(create_hitpoints_less_than_transition(100.))),
+      heal, 
+      moveToEnemy
+    );
+
+    // fully healed but enemy is far -> patrol
+    sm.addTransition(
+      create_and_transition(
+        create_negate_transition(create_enemy_available_transition(7.f)), 
+        create_negate_transition(create_hitpoints_less_than_transition(100.))),
+      heal, 
+      patrol
+    );
+
+    // not fully healed but enemy near -> flee further
+    sm.addTransition(
+      create_and_transition(
+        create_enemy_available_transition(3.f), 
+        create_hitpoints_less_than_transition(100.)),
+      heal, 
+      fleeFromEnemy
+    );
+  });
+}
+
+static void add_swordsman_sm(flecs::entity entity)
+{
+  entity.get([](StateMachine &sm)
+  {
+    int findAlly = sm.addState(create_find_master_state());
+    int moveToAlly = sm.addState(create_move_to_ally_state());
+    int healMaster = sm.addState(create_heal_master_state(50.));
+    int moveToEnemy = sm.addState(create_move_to_enemy_state());
+
+    sm.addTransition(
+      create_has_master_transition(),
+      findAlly,
+      moveToAlly
+    );
+
+    sm.addTransition(
+      create_and_transition(
+        create_master_hitpoints_less_than_transition(80.),
+        create_heal_cooleddown_transition()
+      ),
+      moveToAlly,
+      healMaster
+    );
+
+    sm.addTransition(
+      create_negate_transition(create_heal_cooleddown_transition()),
+      healMaster,
+      moveToAlly
+    );
+
+    sm.addTransition(
+      create_and_transition(
+        create_enemy_available_transition(3.f),
+        create_negate_transition(create_hitpoints_less_than_transition(60.))
+      ),
+      moveToAlly,
+      moveToEnemy
+    );
+
+    sm.addTransition(
+      create_hitpoints_less_than_transition(60.),
+      moveToEnemy,
+      moveToAlly
+    );
+
+    sm.addTransition(
+      create_master_hitpoints_less_than_transition(80.),
+      moveToEnemy,
+      healMaster
+    );
+  });
+}
+
+
 static flecs::entity create_monster(flecs::world &ecs, int x, int y, Color color)
 {
   return ecs.entity()
@@ -140,6 +272,10 @@ void init_roguelike(flecs::world &ecs)
   add_patrol_flee_sm(create_monster(ecs, -5, -5, GetColor(0x111111ff)));
   add_attack_sm(create_monster(ecs, -5, 5, GetColor(0x880000ff)));
 
+  add_berserk_sm(create_monster(ecs, 3, -3, GetColor(0x63012cff)));
+  add_healing_sm(create_monster(ecs, -10, -3, GetColor(0x8ff2d8ff)));
+  add_swordsman_sm(create_monster(ecs, 2, 2, GetColor(0xffea8fff)).set<HealCooldown>({10, 0}).set<Team>({0}).set<MeleeDamage>({40.f}));
+
   create_player(ecs, 0, 0);
 
   create_powerup(ecs, 7, 7, 10.f);
@@ -188,12 +324,12 @@ static Position move_pos(Position pos, int action)
 
 static void process_actions(flecs::world &ecs)
 {
-  static auto processActions = ecs.query<Action, Position, MovePos, const MeleeDamage, const Team>();
+  static auto processActions = ecs.query<Action, Position, MovePos, const MeleeDamage, const Team, HealCooldown*>();
   static auto checkAttacks = ecs.query<const MovePos, Hitpoints, const Team>();
   // Process all actions
   ecs.defer([&]
   {
-    processActions.each([&](flecs::entity entity, Action &a, Position &pos, MovePos &mpos, const MeleeDamage &dmg, const Team &team)
+    processActions.each([&](flecs::entity entity, Action &a, Position &pos, MovePos &mpos, const MeleeDamage &dmg, const Team &team, HealCooldown* cooldown)
     {
       Position nextPos = move_pos(pos, a.action);
       bool blocked = false;
@@ -208,11 +344,15 @@ static void process_actions(flecs::world &ecs)
       });
       if (blocked)
         a.action = EA_NOP;
-      else
+      else {
         mpos = nextPos;
+        if (cooldown != nullptr && cooldown->turns_left > 0) {
+          cooldown->turns_left -= 1;
+        }
+      }
     });
     // now move
-    processActions.each([&](flecs::entity entity, Action &a, Position &pos, MovePos &mpos, const MeleeDamage &, const Team&)
+    processActions.each([&](flecs::entity entity, Action &a, Position &pos, MovePos &mpos, const MeleeDamage &, const Team&, HealCooldown* cooldown)
     {
       pos = mpos;
       a.action = EA_NOP;

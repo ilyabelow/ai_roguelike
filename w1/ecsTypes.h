@@ -1,5 +1,7 @@
 #pragma once
 
+#include <flecs.h>
+
 struct Position;
 struct MovePos;
 
@@ -60,6 +62,7 @@ enum Actions
   EA_MOVE_UP,
   EA_MOVE_END,
   EA_ATTACK = EA_MOVE_END,
+  EA_HEAL = EA_NOP,
   EA_NUM
 };
 
@@ -111,3 +114,11 @@ struct Team
 
 struct TextureSource {};
 
+struct Master {
+  flecs::entity master;
+};
+
+struct HealCooldown {
+  int recharge_turns = 10;
+  int turns_left = 0;
+};
