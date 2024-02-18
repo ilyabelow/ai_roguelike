@@ -52,6 +52,25 @@ static void create_collector_beh(flecs::entity e)
   e.set(BehaviourTree{root});
 }
 
+static void create_guard_beh(flecs::entity e, flecs::entity firstWaypoint)
+{
+  Blackboard bb;
+  bb.set(bb.regName<flecs::entity>("next_waypoint"), firstWaypoint);
+  e.set(std::move(bb));
+  BehNode *root =
+    selector({
+      sequence({
+        find_enemy(e, 3.f, "attack_enemy"),
+        move_to_entity(e, "attack_enemy")
+      }),
+      sequence({
+        move_to_entity(e, "next_waypoint"),
+        choose_next_waypoint(e, "next_waypoint")
+      }),
+    });
+  e.set(BehaviourTree{root});
+}
+
 static flecs::entity create_monster(flecs::world &ecs, int x, int y, Color col, const char *texture_src)
 {
   flecs::entity textureSrc = ecs.entity(texture_src);
@@ -68,6 +87,24 @@ static flecs::entity create_monster(flecs::world &ecs, int x, int y, Color col, 
     .set(MeleeDamage{20.f})
     .set(Blackboard{});
 }
+
+static flecs::entity create_last_waypoint(flecs::world &ecs, int x, int y)
+{
+  return ecs.entity()
+    .set(Position{x, y})
+    .set(Color{0x44, 0x44, 0x44, 0xff})
+    .set(Waypoint{});
+}
+
+
+static flecs::entity create_waypoint(flecs::world &ecs, int x, int y, flecs::entity next)
+{
+  return ecs.entity()
+    .set(Position{x, y})
+    .set(Color{0x44, 0x44, 0x44, 0xff})
+    .set(Waypoint{next});
+}
+
 
 static void create_player(flecs::world &ecs, int x, int y, const char *texture_src)
 {
@@ -154,6 +191,8 @@ void init_roguelike(flecs::world &ecs)
     .set(Texture2D{LoadTexture("assets/minotaur.png")});
   ecs.entity("collector_tex")
     .set(Texture2D{LoadTexture("assets/collector.png")});
+  ecs.entity("guard_tex")
+    .set(Texture2D{LoadTexture("assets/guard.png")});
 
   ecs.observer<Texture2D>()
     .event(flecs::OnRemove)
@@ -168,6 +207,16 @@ void init_roguelike(flecs::world &ecs)
   create_minotaur_beh(create_monster(ecs, -5, 5, Color{0, 255, 0, 255}, "minotaur_tex"));
 
   create_collector_beh(create_monster(ecs, -1, 1, Color{255, 255, 255, 255}, "collector_tex"));
+
+  auto lastWaypoint = create_last_waypoint(ecs, 4, 4);
+  auto firstWaypoint =
+    create_waypoint(ecs, 4, 1,
+    create_waypoint(ecs, -1, 0,
+    create_waypoint(ecs, 1, 4,
+    lastWaypoint)));
+  lastWaypoint.set(Waypoint{firstWaypoint});
+
+  create_guard_beh(create_monster(ecs, 5, 6, Color{255, 255, 255, 255}, "guard_tex"), lastWaypoint);
 
   create_player(ecs, 0, 0, "swordsman_tex");
 

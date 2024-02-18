@@ -322,6 +322,30 @@ struct PickupPowerup : public BehNode
   }
 };
 
+struct ChooseNextWaypoint : public BehNode
+{
+  size_t waypointBb = size_t(-1);
+  ChooseNextWaypoint(flecs::entity entity, const char *bb_name)
+  {
+    waypointBb = reg_entity_blackboard_var<flecs::entity>(entity, bb_name);
+  }
+
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
+  {
+    BehResult res = BEH_FAIL;
+    flecs::entity currentWaypoint = bb.get<flecs::entity>(waypointBb);
+
+    currentWaypoint.set([&](const Position &wppos, const Waypoint& wp)
+    {
+      if (wp.next.is_alive()) {
+        bb.set<flecs::entity>(waypointBb, wp.next);
+        res = BEH_SUCCESS;
+      }
+    });
+    return res;
+  }
+};
+
 BehNode *sequence(const std::vector<BehNode*> &nodes)
 {
   Sequence *seq = new Sequence;
@@ -390,4 +414,8 @@ BehNode *pickup_health() {
 
 BehNode *pickup_powerup() {
   return new PickupPowerup;
+}
+
+BehNode *choose_next_waypoint(flecs::entity entity, const char *bb_name) {
+  return new ChooseNextWaypoint(entity, bb_name);
 }

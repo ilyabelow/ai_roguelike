@@ -31,3 +31,4 @@ BehNode *find_powerup(flecs::entity entity, float dist, const char *bb_name);
 BehNode *find_health(flecs::entity entity, float dist, const char *bb_name);
 BehNode *pickup_powerup();
 BehNode *pickup_health();
+BehNode *choose_next_waypoint(flecs::entity entity, const char *bb_name);

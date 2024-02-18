@@ -112,3 +112,9 @@ struct Team
 
 struct TextureSource {};
 
+#include <flecs.h>
+
+struct Waypoint
+{
+  flecs::entity next;
+};
