@@ -27,3 +27,7 @@ BehNode *flee(flecs::entity entity, const char *bb_name);
 BehNode *patrol(flecs::entity entity, float patrol_dist, const char *bb_name);
 BehNode *inverse(BehNode* node);
 BehNode *parallel(const std::vector<BehNode*> &nodes);
+BehNode *find_powerup(flecs::entity entity, float dist, const char *bb_name);
+BehNode *find_health(flecs::entity entity, float dist, const char *bb_name);
+BehNode *pickup_powerup();
+BehNode *pickup_health();

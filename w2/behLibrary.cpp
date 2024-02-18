@@ -237,6 +237,90 @@ struct Parallel : public CompoundNode
   }
 };
 
+template <typename T>
+struct FindNearestEntity : public BehNode
+{
+  size_t entityBb = size_t(-1);
+  float distance = 0;
+  FindNearestEntity(flecs::entity entity, float in_dist, const char *bb_name) : distance(in_dist)
+  {
+    entityBb = reg_entity_blackboard_var<flecs::entity>(entity, bb_name);
+  }
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
+  {
+    BehResult res = BEH_FAIL;
+    static auto entitiesQuery = ecs.query<const Position, const T>();
+    entity.set([&](const Position &pos)
+    {
+      flecs::entity closestEntity;
+      float closestDist = FLT_MAX;
+      Position closestPos;
+      entitiesQuery.each([&](flecs::entity entity, const Position &epos, const T &)
+      {
+        float curDist = dist(epos, pos);
+        if (curDist < closestDist)
+        {
+          closestDist = curDist;
+          closestPos = epos;
+          closestEntity = entity;
+        }
+      });
+      if (ecs.is_valid(closestEntity) && closestDist <= distance)
+      {
+        bb.set<flecs::entity>(entityBb, closestEntity);
+        res = BEH_SUCCESS;
+      }
+    });
+    return res;
+  }
+};
+
+using FindPowerup = FindNearestEntity<PowerupAmount>;
+using FindHealth = FindNearestEntity<HealAmount>;
+
+struct PickupHealth : public BehNode
+{
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
+  {
+    static auto pickupHealthQuery = ecs.query<const Position, const HealAmount>();
+    bool success = false;
+    entity.set([&](const Position &pos, Hitpoints &hp, MeleeDamage &dmg)
+    {
+      pickupHealthQuery.each([&](flecs::entity entity, const Position &ppos, const HealAmount &amt)
+      {
+        if (pos == ppos)
+        {
+          hp.hitpoints += amt.amount;
+          entity.destruct();
+          success = true;
+        }
+      });
+    });
+    return success ? BEH_SUCCESS : BEH_FAIL;
+  }
+};
+
+struct PickupPowerup : public BehNode
+{
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
+  {
+    static auto pickupPowerupQuery = ecs.query<const Position, const PowerupAmount>();
+    bool success = false;
+    entity.set([&](const Position &pos, Hitpoints &hp, MeleeDamage &dmg)
+    {
+      pickupPowerupQuery.each([&](flecs::entity entity, const Position &ppos, const PowerupAmount &amt)
+      {
+        if (pos == ppos)
+        {
+          dmg.damage += amt.amount;
+          entity.destruct();
+          success = true;
+        }
+      });
+    });
+    return success ? BEH_SUCCESS : BEH_FAIL;
+  }
+};
 
 BehNode *sequence(const std::vector<BehNode*> &nodes)
 {
@@ -290,4 +374,20 @@ BehNode *parallel(const std::vector<BehNode*> &nodes)
   for (BehNode *node : nodes)
     par->pushNode(node);
   return par;
+}
+
+BehNode *find_powerup(flecs::entity entity, float dist, const char *bb_name) {
+  return new FindPowerup(entity, dist, bb_name);
+}
+
+BehNode *find_health(flecs::entity entity, float dist, const char *bb_name) {
+  return new FindHealth(entity, dist, bb_name);
+}
+
+BehNode *pickup_health() {
+  return new PickupHealth;
+}
+
+BehNode *pickup_powerup() {
+  return new PickupPowerup;
 }

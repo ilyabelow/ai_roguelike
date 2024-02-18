@@ -25,6 +25,33 @@ static void create_minotaur_beh(flecs::entity e)
   e.set(BehaviourTree{root});
 }
 
+static void create_collector_beh(flecs::entity e)
+{
+  e.set(Blackboard{});
+  BehNode *root =
+    selector({
+      sequence({
+        find_enemy(e, 2.f, "attack_enemy"),
+        move_to_entity(e, "attack_enemy")
+      }),
+      sequence({
+        find_powerup(e, 20.f, "collect_powerup"),
+        move_to_entity(e, "collect_powerup"),
+        pickup_powerup()
+      }),
+      sequence({
+        find_health(e, 20.f, "collect_health"),
+        move_to_entity(e, "collect_health"),
+        pickup_health()
+      }),
+      sequence({
+        find_enemy(e, 10.f, "attack_enemy"),
+        move_to_entity(e, "attack_enemy")
+      })
+    });
+  e.set(BehaviourTree{root});
+}
+
 static flecs::entity create_monster(flecs::world &ecs, int x, int y, Color col, const char *texture_src)
 {
   flecs::entity textureSrc = ecs.entity(texture_src);
@@ -125,6 +152,8 @@ void init_roguelike(flecs::world &ecs)
     .set(Texture2D{LoadTexture("assets/swordsman.png")});
   ecs.entity("minotaur_tex")
     .set(Texture2D{LoadTexture("assets/minotaur.png")});
+  ecs.entity("collector_tex")
+    .set(Texture2D{LoadTexture("assets/collector.png")});
 
   ecs.observer<Texture2D>()
     .event(flecs::OnRemove)
@@ -137,6 +166,8 @@ void init_roguelike(flecs::world &ecs)
   create_minotaur_beh(create_monster(ecs, 10, -5, Color{0xee, 0x00, 0xee, 0xff}, "minotaur_tex"));
   create_minotaur_beh(create_monster(ecs, -5, -5, Color{0x11, 0x11, 0x11, 0xff}, "minotaur_tex"));
   create_minotaur_beh(create_monster(ecs, -5, 5, Color{0, 255, 0, 255}, "minotaur_tex"));
+
+  create_collector_beh(create_monster(ecs, -1, 1, Color{255, 255, 255, 255}, "collector_tex"));
 
   create_player(ecs, 0, 0, "swordsman_tex");
 
