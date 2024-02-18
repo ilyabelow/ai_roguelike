@@ -7,6 +7,8 @@
 #include "math.h"
 #include "dungeonGen.h"
 #include "dungeonUtils.h"
+#include <stdio.h>
+#include <stdint.h>
 
 template<typename T>
 static size_t coord_to_idx(T x, T y, size_t w)

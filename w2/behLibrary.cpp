@@ -197,6 +197,46 @@ struct Patrol : public BehNode
   }
 };
 
+struct Inverse : public BehNode
+{
+  BehNode* node;
+
+  Inverse(BehNode* node) : node(node) {}
+
+  virtual ~Inverse() { delete node; }
+
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
+  {
+    BehResult res = node->update(ecs, entity, bb);
+    switch (res)
+    {
+    case BEH_SUCCESS:
+      return BEH_FAIL;
+      break;
+    case BEH_FAIL:
+      return BEH_SUCCESS;
+      break;
+    case BEH_RUNNING:
+      return BEH_RUNNING;
+      break;
+    }
+  }
+};
+
+struct Parallel : public CompoundNode
+{
+  BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
+  {
+    for (BehNode *node : nodes)
+    {
+      BehResult res = node->update(ecs, entity, bb);
+      if (res != BEH_RUNNING)
+        return res;
+    }
+    return BEH_RUNNING;
+  }
+};
+
 
 BehNode *sequence(const std::vector<BehNode*> &nodes)
 {
@@ -239,3 +279,15 @@ BehNode *patrol(flecs::entity entity, float patrol_dist, const char *bb_name)
   return new Patrol(entity, patrol_dist, bb_name);
 }
 
+BehNode *inverse(BehNode* node)
+{
+  return new Inverse(node);
+}
+
+BehNode *parallel(const std::vector<BehNode*> &nodes)
+{
+  Parallel *par = new Parallel;
+  for (BehNode *node : nodes)
+    par->pushNode(node);
+  return par;
+}
