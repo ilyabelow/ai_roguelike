@@ -129,3 +129,8 @@ struct ActionLog
   size_t capacity = 5;
 };
 
+#include <flecs.h>
+
+struct Base {
+  flecs::entity base;
+};

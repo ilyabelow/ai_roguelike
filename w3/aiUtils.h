@@ -59,3 +59,17 @@ inline size_t reg_entity_blackboard_var(flecs::entity entity, const char *bb_nam
   return res;
 }
 
+inline int weighted_random(const float *weights, int numWeights)
+{
+  float totalWeight = 0;
+  for (int i = 0; i < numWeights; ++i)
+    totalWeight += weights[i];
+  float r = totalWeight * (rand() / (float)RAND_MAX);
+  for (int i = 0; i < numWeights; ++i)
+  {
+    r -= weights[i];
+    if (r <= 0)
+      return i;
+  }
+  return numWeights - 1;
+}

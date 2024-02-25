@@ -73,6 +73,51 @@ static void create_minotaur_beh(flecs::entity e)
   e.set(BehaviourTree{root});
 }
 
+static void create_explorer_beh(flecs::entity e, flecs::entity base)
+{
+  BehNode *root =
+    utility_selector({
+      std::make_pair(
+        stiky_explore(),
+        [](Blackboard &bb)
+        {
+          const float base_dist = bb.get<float>("baseDist");
+          const float ally_dist = bb.get<float>("allyDist");
+          return std::max(50. * (ally_dist <= 3.), 50. * (base_dist <= 4.));
+        }
+      ),
+      std::make_pair(
+        move_to_entity(e, "base"),
+        [](Blackboard &bb)
+        {
+          const float base_dist = bb.get<float>("baseDist");
+          const float enemy_dist = bb.get<float>("enemyDist");
+          return std::min(100., 20. + 50. * base_dist / (2 * enemy_dist + 2.));
+        }
+      ),
+      std::make_pair(
+        sequence({
+          find_enemy(e, 3.f, "attack_enemy"),
+          move_to_entity(e, "attack_enemy")
+        }),
+        [](Blackboard &bb)
+        {
+          const float enemy_dist = bb.get<float>("enemyDist");
+          const float base_dist = bb.get<float>("baseDist");
+          return std::min(100., 200. / (enemy_dist + 1.) / (base_dist*.5 + 1.));
+        }
+      )
+    });
+
+  Blackboard bb;
+  bb.set(bb.regName<flecs::entity>("base"), base);
+
+  e.add<WorldInfoGatherer>()
+   .set(BehaviourTree{root})
+   .set(std::move(bb))
+   .add<Base>(base);
+}
+
 static flecs::entity create_monster(flecs::world &ecs, int x, int y, Color col, const char *texture_src)
 {
   flecs::entity textureSrc = ecs.entity(texture_src);
@@ -106,6 +151,15 @@ static void create_player(flecs::world &ecs, int x, int y, const char *texture_s
     .set(Color{255, 255, 255, 255})
     .add<TextureSource>(textureSrc)
     .set(MeleeDamage{50.f});
+}
+
+static flecs::entity create_base(flecs::world &ecs, int x, int y, const char *texture_src)
+{
+  flecs::entity textureSrc = ecs.entity(texture_src);
+  return ecs.entity()
+    .set(Position{x, y})
+    .set(Color{255, 255, 255, 255})
+    .add<TextureSource>(textureSrc);
 }
 
 static void create_heal(flecs::world &ecs, int x, int y, float amount)
@@ -183,6 +237,10 @@ void init_roguelike(flecs::world &ecs)
     .set(Texture2D{LoadTexture("assets/swordsman.png")});
   ecs.entity("minotaur_tex")
     .set(Texture2D{LoadTexture("assets/minotaur.png")});
+  ecs.entity("base_tex")
+    .set(Texture2D{LoadTexture("assets/base.png")});
+  ecs.entity("explorer_tex")
+    .set(Texture2D{LoadTexture("assets/explorer.png")});
 
   ecs.observer<Texture2D>()
     .event(flecs::OnRemove)
@@ -197,6 +255,13 @@ void init_roguelike(flecs::world &ecs)
   create_fuzzy_monster_beh(create_monster(ecs, -5, 5, Color{0, 255, 0, 255}, "minotaur_tex"));
 
   create_player(ecs, 0, 0, "swordsman_tex");
+
+  auto base = create_base(ecs, 0, 2, "base_tex");
+  create_explorer_beh(create_monster(ecs, 0, 5, Color{255, 255, 255, 255}, "explorer_tex"), base);
+  create_explorer_beh(create_monster(ecs, 1, 3, Color{255, 255, 255, 255}, "explorer_tex"), base);
+  create_explorer_beh(create_monster(ecs, 1, 4, Color{255, 255, 255, 255}, "explorer_tex"), base);
+  create_explorer_beh(create_monster(ecs, 2, 4, Color{255, 255, 255, 255}, "explorer_tex"), base);
+  create_explorer_beh(create_monster(ecs, 1, 5, Color{255, 255, 255, 255}, "explorer_tex"), base);
 
   create_powerup(ecs, 7, 7, 10.f);
   create_powerup(ecs, 10, -6, 10.f);
@@ -355,28 +420,37 @@ static void gather_world_info(flecs::world &ecs)
   static auto gatherWorldInfo = ecs.query<Blackboard,
                                           const Position, const Hitpoints,
                                           const WorldInfoGatherer,
-                                          const Team>();
+                                          const Team,
+                                          Base*>();
   static auto alliesQuery = ecs.query<const Position, const Team>();
   gatherWorldInfo.each([&](Blackboard &bb, const Position &pos, const Hitpoints &hp,
-                           WorldInfoGatherer, const Team &team)
+                           WorldInfoGatherer, const Team &team, Base* base)
   {
     // first gather all needed names (without cache)
     push_info_to_bb(bb, "hp", hp.hitpoints);
-    float numAllies = 0; // note float
     float closestEnemyDist = 100.f;
+    float closestAllyDist = 100.f;
     alliesQuery.each([&](const Position &apos, const Team &ateam)
     {
-      constexpr float limitDist = 5.f;
-      if (team.team == ateam.team && dist_sq(pos, apos) < sqr(limitDist))
-        numAllies += 1.f;
       if (team.team != ateam.team)
       {
         const float enemyDist = dist(pos, apos);
         if (enemyDist < closestEnemyDist)
           closestEnemyDist = enemyDist;
+      } else {
+        const float allyDist = dist(pos, apos);
+        if (allyDist < closestAllyDist)
+          closestAllyDist = allyDist;
       }
     });
-    push_info_to_bb(bb, "alliesNum", numAllies);
+    if (base)
+    {
+      base->base.set([&](const Position &bpos)
+      {
+        push_info_to_bb(bb, "baseDist", dist(pos, bpos));
+      });
+    }
+    push_info_to_bb(bb, "allyDist", closestAllyDist);
     push_info_to_bb(bb, "enemyDist", closestEnemyDist);
   });
 }

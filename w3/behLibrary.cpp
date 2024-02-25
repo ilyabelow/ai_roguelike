@@ -244,6 +244,46 @@ struct PatchUp : public BehNode
   }
 };
 
+struct StikyExplore : public BehNode
+{
+  BehResult update(flecs::world &, flecs::entity entity, Blackboard &bb) override
+  {
+    entity.set([&](Action &a)
+    {
+      // left, right, down, up
+      std::array<float, 4> weights;
+      const float same_dir = 1.f;
+      const float opp_dir = 0.1f;
+      const float prerp_dir = 0.4f;
+      switch (a.action)
+      {
+      case EA_MOVE_LEFT:
+        //            L      R     D     U
+        weights = { same_dir, opp_dir,   prerp_dir,  prerp_dir };
+        break;
+      case EA_MOVE_RIGHT:
+        //            L      R     D     U
+        weights = { opp_dir, same_dir,   prerp_dir,  prerp_dir };
+        break;
+      case EA_MOVE_DOWN:
+        //            L      R     D     U
+        weights = { prerp_dir, prerp_dir, same_dir,   opp_dir };
+        break;
+      case EA_MOVE_UP:
+        //            L      R     D     U
+        weights = { prerp_dir, prerp_dir, opp_dir, same_dir };
+        break;
+      default:
+        //            L      R     D     U
+        weights = { 0.25f, 0.25f, 0.25f, 0.25f };
+        break;
+      }
+      a.action = EA_MOVE_START + weighted_random(weights.data(), weights.size());
+    });
+
+    return BEH_RUNNING;
+  }
+};
 
 
 BehNode *sequence(const std::vector<BehNode*> &nodes)
@@ -299,4 +339,7 @@ BehNode *patch_up(float thres)
   return new PatchUp(thres);
 }
 
-
+BehNode *stiky_explore()
+{
+  return new StikyExplore;
+}
