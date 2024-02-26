@@ -109,6 +109,7 @@ struct PlayerInput
   bool up = false;
   bool down = false;
   bool passed = false;
+  bool explore = false;
 };
 
 struct Symbol
@@ -143,6 +144,13 @@ struct BackgroundTile {};
 struct DungeonData
 {
   std::vector<char> tiles; // for pathfinding
+  size_t width;
+  size_t height;
+};
+
+struct ExplorationData
+{
+  std::vector<char> explored;
   size_t width;
   size_t height;
 };
