@@ -55,27 +55,78 @@ struct Selector : public CompoundNode
 struct UtilitySelector : public BehNode
 {
   std::vector<std::pair<BehNode*, utility_function>> utilityNodes;
+  bool random = false;
+  bool cooldown = false;
+  const float cooldownSpeed = 0.7;
+  struct {
+    float additional = 0.f;
+    size_t idx = -1;
+  } cooldownState;
+
+  UtilitySelector(bool random, bool cooldown) : random(random), cooldown(cooldown) {}
 
   BehResult update(flecs::world &ecs, flecs::entity entity, Blackboard &bb) override
   {
-    std::vector<std::pair<float, size_t>> utilityScores;
-    for (size_t i = 0; i < utilityNodes.size(); ++i)
+    if (random)
     {
-      const float utilityScore = utilityNodes[i].second(bb);
-      utilityScores.push_back(std::make_pair(utilityScore, i));
-    }
-    std::sort(utilityScores.begin(), utilityScores.end(), [](auto &lhs, auto &rhs)
-    {
-      return lhs.first > rhs.first;
-    });
-    for (const std::pair<float, size_t> &node : utilityScores)
-    {
-      size_t nodeIdx = node.second;
-      BehResult res = utilityNodes[nodeIdx].first->update(ecs, entity, bb);
-      if (res != BEH_FAIL)
-        return res;
+      std::vector<float> utilityScores;
+      size_t nonZeroUtilities = 0;
+      for (size_t i = 0; i < utilityNodes.size(); ++i)
+      {
+        const float utilityScore = getScore(i, bb);
+        if (utilityScore > 0)
+          nonZeroUtilities++;
+        utilityScores.push_back(utilityScore);
+      }
+      while (nonZeroUtilities > 0)
+      {
+        size_t nodeIdx = weighted_random(utilityScores.data(), utilityScores.size());
+        BehResult res = tryUpdate(nodeIdx, ecs, entity, bb);
+        if (res != BEH_FAIL)
+          return res;
+        utilityScores[nodeIdx] = 0.;
+        nonZeroUtilities--;
+      }
+    } else {
+      std::vector<std::pair<float, size_t>> utilityScores;
+      for (size_t i = 0; i < utilityNodes.size(); ++i)
+      {
+        const float utilityScore = getScore(i, bb);
+        utilityScores.push_back(std::make_pair(utilityScore, i));
+      }
+      std::sort(utilityScores.begin(), utilityScores.end(), [](auto &lhs, auto &rhs)
+      {
+        return lhs.first > rhs.first;
+      });
+      for (const std::pair<float, size_t> &node : utilityScores)
+      {
+        size_t nodeIdx = node.second;
+        BehResult res = tryUpdate(nodeIdx, ecs, entity, bb);
+        if (res != BEH_FAIL)
+          return res;
+      }
     }
     return BEH_FAIL;
+  }
+private:
+  float getScore(size_t i, Blackboard &bb) {
+    float add = cooldown && cooldownState.idx == i ? cooldownState.additional : 0.f;
+    return utilityNodes[i].second(bb) + add;
+  }
+
+  BehResult tryUpdate(size_t i, flecs::world &ecs, flecs::entity entity, Blackboard &bb) {
+    BehResult res = utilityNodes[i].first->update(ecs, entity, bb);
+    if (res != BEH_FAIL && cooldown) {
+      if (cooldownState.idx != i) {
+        cooldownState.idx = i;
+        cooldownState.additional = 100.f;
+      } else {
+        cooldownState.additional *= cooldownSpeed;
+        if (cooldownState.additional <= 10.f)
+          cooldownState.idx = -1;
+      }
+    }
+    return res;
   }
 };
 
@@ -302,9 +353,9 @@ BehNode *selector(const std::vector<BehNode*> &nodes)
   return sel;
 }
 
-BehNode *utility_selector(const std::vector<std::pair<BehNode*, utility_function>> &nodes)
+BehNode *utility_selector(const std::vector<std::pair<BehNode*, utility_function>> &nodes, bool random, bool cooldown)
 {
-  UtilitySelector *usel = new UtilitySelector;
+  UtilitySelector *usel = new UtilitySelector(random, cooldown);
   usel->utilityNodes = std::move(nodes);
   return usel;
 }

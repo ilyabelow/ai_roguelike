@@ -107,7 +107,7 @@ static void create_explorer_beh(flecs::entity e, flecs::entity base)
           return std::min(100., 200. / (enemy_dist + 1.) / (base_dist*.5 + 1.));
         }
       )
-    });
+    }, true, true);
 
   Blackboard bb;
   bb.set(bb.regName<flecs::entity>("base"), base);
