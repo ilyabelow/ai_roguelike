@@ -5,6 +5,7 @@
 #include "dungeonUtils.h"
 #include "dijkstraMapGen.h"
 #include "steering.h"
+#include "rlikeObjects.h"
 
 static Position find_free_dungeon_tile(flecs::world &ecs)
 {
@@ -16,7 +17,7 @@ static Position find_free_dungeon_tile(flecs::world &ecs)
     Position pos = dungeon::find_walkable_tile(ecs);
     findMonstersQuery.each([&](const Position &p, const Hitpoints&)
     {
-      if (p == pos)
+      if (int(p.x) == int(pos.x) && int(p.y) == int(pos.y))
         done = false;
     });
     if (done)
@@ -65,19 +66,6 @@ static void register_roguelike_systems(flecs::world &ecs)
           Vector2{1, 1}, Vector2{0, 0},
           Rectangle{float(pos.x) * tile_size, float(pos.y) * tile_size, tile_size, tile_size}, color);
     });
-  ecs.system<const Position, const Hitpoints>()
-    .each([&](const Position &pos, const Hitpoints &hp)
-    {
-      constexpr float hpPadding = 0.05f;
-      const float hpWidth = 1.f - 2.f * hpPadding;
-      const Rectangle underRect = {float(pos.x + hpPadding) * tile_size, float(pos.y-0.25f) * tile_size,
-                                   hpWidth * tile_size, 0.1f * tile_size};
-      DrawRectangleRec(underRect, BLACK);
-      const Rectangle hpRect = {float(pos.x + hpPadding) * tile_size, float(pos.y-0.25f) * tile_size,
-                                hp.hitpoints / 100.f * hpWidth * tile_size, 0.1f * tile_size};
-      DrawRectangleRec(hpRect, RED);
-    });
-
   ecs.system<Texture2D>()
     .each([&](Texture2D &tex)
     {
@@ -129,7 +117,7 @@ static void register_roguelike_systems(flecs::world &ecs)
       });
     });
 
-  const int step_count = 3;
+  const int step_count = 2;
 
   // a little more drawing
   ecs.system<const FlowMapData>()
@@ -198,7 +186,7 @@ static void register_roguelike_systems(flecs::world &ecs)
 
         std::vector<Vector2> flowMap = dmaps::gen_flow_map(targetMap, ts.w, ts.h, step_count);
         ecs.entity("flow_map")
-          .set(FlowMapData{flowMap})
+          .set(FlowMapData{flowMap, ts.w, ts.h})
           .add<VisualiseMap>();
       }
     });
@@ -220,6 +208,13 @@ void init_roguelike(flecs::world &ecs)
       {
         UnloadTexture(texture);
       });
+
+  const int monsters = 30;
+  for (int i = 0; i < monsters; ++i)
+  {
+    Position pos = find_free_dungeon_tile(ecs);
+    steer::create_go_with_the_flow_er(create_monster(ecs, pos, Color{0x1f, 0xaf, 0xff, 0xff}, "minotaur_tex"));
+  }
 
   // query creation inside of another query does not work
   dmaps::init_query_dungeon_data(ecs);

@@ -13,6 +13,7 @@ namespace steer
   };
 
   flecs::entity create_steer_beh(flecs::entity e, Type type);
+  flecs::entity create_go_with_the_flow_er(flecs::entity e);
 
   flecs::entity create_seeker(flecs::entity e);
   flecs::entity create_pursuer(flecs::entity e);

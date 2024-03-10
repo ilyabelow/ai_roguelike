@@ -1,5 +1,6 @@
 #include "steering.h"
 #include "ecsTypes.h"
+#include "roguelike.h"
 
 struct Seeker {};
 struct Pursuer {};
@@ -9,7 +10,8 @@ struct Separation {};
 struct Alignment {};
 struct Cohesion {};
 
-struct SteerAccel { float accel = 1.f; };
+struct FlowMapFollower {};
+
 
 static flecs::entity create_separation(flecs::entity e)
 {
@@ -33,6 +35,11 @@ static flecs::entity create_steerer(flecs::entity e)
         create_separation(e.set(SteerDir{0.f, 0.f}).set(SteerAccel{1.f}))
         )
       );
+}
+
+flecs::entity steer::create_go_with_the_flow_er(flecs::entity e)
+{
+  return e.add<FlowMapFollower>();
 }
 
 flecs::entity steer::create_seeker(flecs::entity e)
@@ -73,6 +80,7 @@ flecs::entity steer::create_steer_beh(flecs::entity e, Type type)
 void steer::register_systems(flecs::world &ecs)
 {
   static auto playerPosQuery = ecs.query<const Position, const Velocity, const IsPlayer>();
+  static auto flowmapQuery = ecs.query<const FlowMapData>();
 
   ecs.system<Velocity, const MoveSpeed, const SteerDir, const SteerAccel>()
     .each([&](Velocity &vel, const MoveSpeed &ms, const SteerDir &sd, const SteerAccel &sa)
@@ -82,6 +90,25 @@ void steer::register_systems(flecs::world &ecs)
 
   // reset steer dir
   ecs.system<SteerDir>().each([&](SteerDir &sd) { sd = {0.f, 0.f}; });
+
+  // field steering
+
+  ecs.system<SteerDir, const MoveSpeed, const Velocity, const Position, const FlowMapFollower>()
+    .each([&](SteerDir &sd, const MoveSpeed &ms, const Velocity &vel, const Position &p, const FlowMapFollower &)
+    {
+      flowmapQuery.each([&](const FlowMapData &fmd)
+      {
+        const float how_far_in_future = .5f;
+        Position future = p + vel * how_far_in_future;
+        const int x = int(future.x + 0.5);
+        const int y = int(future.y + 0.5);
+        if (x < 0 || y < 0 || x >= fmd.width || y >= fmd.height)
+          return;
+        const Vector2 flow = fmd.map[y * fmd.width + x];
+        const Position flow_dir{flow.x, flow.y};
+        sd += SteerDir{normalize(flow_dir) * ms.speed - vel};
+      });
+    });
 
   // seeker
   ecs.system<SteerDir, const MoveSpeed, const Velocity, const Position, const Seeker>()

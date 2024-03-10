@@ -69,6 +69,8 @@ inline Position truncate(const Position &v, float len)
 inline bool operator==(const Position &lhs, const Position &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
 inline bool operator!=(const Position &lhs, const Position &rhs) { return !(lhs == rhs); }
 
+struct SteerAccel { float accel = 1.f; };
+
 
 struct MoveSpeed
 {
@@ -199,4 +201,6 @@ struct Target {};
 
 struct FlowMapData {
   std::vector<Vector2> map;
+  int width;
+  int height;
 };
