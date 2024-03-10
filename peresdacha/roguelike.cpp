@@ -9,6 +9,9 @@
 #include "dijkstraMapGen.h"
 #include "dmapFollower.h"
 
+static flecs::query<const Target> targetQuery;
+
+
 static flecs::entity create_player_approacher(flecs::entity e)
 {
   e.set(DmapWeights{{{"approach_map", {1.f, 1.f}}}});
@@ -297,6 +300,42 @@ static void register_roguelike_systems(flecs::world &ecs)
           }
       });
     });
+
+  ecs.system<TargetSelector>()
+    .each([&](TargetSelector &ts)
+    {
+      if (!IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        return;
+      Vector2 mouse = GetMousePosition();
+      mouse = Vector2{mouse.x - ts.camera->offset.x, mouse.y - ts.camera->offset.y};
+      mouse = Vector2{mouse.x / ts.camera->zoom, mouse.y / ts.camera->zoom};
+      mouse = Vector2{mouse.x + ts.camera->target.x, mouse.y + ts.camera->target.y};
+      int tile_x = int(mouse.x / tile_size);
+      int tile_y = int(mouse.y / tile_size);
+
+      bool isWall = false;
+      dungeonDataQuery.each([&](const DungeonData &dd)
+      {
+        isWall = dd.tiles[tile_y * dd.width + tile_x] == dungeon::wall;
+      });
+      if (tile_x >= 0 && tile_x < ts.w && tile_y >= 0 && tile_y < ts.w && !isWall)
+      {
+        bool samePlace = false;
+        if (ts.target.is_alive()) {
+          ts.target.get([&](const Position& pos) {
+            samePlace = pos.x == tile_x && pos.y == tile_y;
+          });
+          ts.target.destruct();
+        }
+        if (samePlace)
+          return;
+        ts.target = ecs.entity()
+          .set(Position{tile_x, tile_y})
+          .set(Color{0xff, 0xff, 0xff, 0xff})
+          .add<Target>()
+          .add<TextureSource>(ecs.entity("target_tex"));
+      }
+    });
 }
 
 
@@ -308,6 +347,8 @@ void init_roguelike(flecs::world &ecs)
     .set(Texture2D{LoadTexture("assets/swordsman.png")});
   ecs.entity("minotaur_tex")
     .set(Texture2D{LoadTexture("assets/minotaur.png")});
+  ecs.entity("target_tex")
+    .set(Texture2D{LoadTexture("assets/target.png")});
 
   ecs.observer<Texture2D>()
     .event(flecs::OnRemove)

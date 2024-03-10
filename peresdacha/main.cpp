@@ -50,6 +50,9 @@ int main(int /*argc*/, const char ** /*argv*/)
   camera.rotation = 0.f;
   camera.zoom = 0.04;
 
+  ecs.entity("target_selector")
+    .set(TargetSelector{&camera, dungWidth, dungHeight, ecs.entity().add<Position>()});
+
   SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
   while (!WindowShouldClose())
   {

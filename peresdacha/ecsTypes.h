@@ -165,3 +165,15 @@ struct DmapWeights
 };
 
 struct Hive {};
+
+#include "raylib.h"
+#include <flecs.h>
+
+struct TargetSelector {
+  Camera2D *camera;
+  int w;
+  int h;
+  flecs::entity target;
+};
+
+struct Target {};
