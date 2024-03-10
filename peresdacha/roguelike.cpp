@@ -213,7 +213,9 @@ void init_roguelike(flecs::world &ecs)
   for (int i = 0; i < monsters; ++i)
   {
     Position pos = find_free_dungeon_tile(ecs);
-    steer::create_go_with_the_flow_er(create_monster(ecs, pos, Color{0x1f, 0xaf, 0xff, 0xff}, "minotaur_tex"));
+    steer::create_separation(
+    steer::create_go_with_the_flow_er(
+    create_monster(ecs, pos, Color{0x1f, 0xaf, 0xff, 0xff}, "minotaur_tex")), 1.f, 0.5f);
   }
 
   // query creation inside of another query does not work

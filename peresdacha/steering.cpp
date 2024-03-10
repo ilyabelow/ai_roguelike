@@ -6,16 +6,16 @@ struct Seeker {};
 struct Pursuer {};
 struct Evader {};
 struct Fleer {};
-struct Separation {};
+struct Separation { float threshold = 0.f; float force = 0.f; };
 struct Alignment {};
 struct Cohesion {};
 
 struct FlowMapFollower {};
 
 
-static flecs::entity create_separation(flecs::entity e)
+flecs::entity steer::create_separation(flecs::entity e, float threshold, float force)
 {
-  return e.add<Separation>();
+  return e.set(Separation{threshold, force});
 }
 
 static flecs::entity create_alignment(flecs::entity e)
@@ -32,7 +32,7 @@ static flecs::entity create_steerer(flecs::entity e)
 {
   return create_cohesion(
       create_alignment(
-        create_separation(e.set(SteerDir{0.f, 0.f}).set(SteerAccel{1.f}))
+        steer::create_separation(e.set(SteerDir{0.f, 0.f}).set(SteerAccel{1.f}), 70.f, 1.f)
         )
       );
 }
@@ -163,23 +163,22 @@ void steer::register_systems(flecs::world &ecs)
       });
     });
 
-  static auto otherPosQuery = ecs.query<const Position>();
+  static auto otherPosQuery = ecs.query<const Position, const Separation>();
 
   // separation is expensive!!!
   ecs.system<SteerDir, const Velocity, const MoveSpeed, const Position, const Separation>()
     .each([&](flecs::entity ent, SteerDir &sd, const Velocity &vel, const MoveSpeed &ms,
-              const Position &p, const Separation &)
+              const Position &p, const Separation &sep)
     {
-      otherPosQuery.each([&](flecs::entity oe, const Position &op)
+      otherPosQuery.each([&](flecs::entity oe, const Position &op, const Separation &)
       {
         if (oe == ent)
           return;
-        constexpr float thresDist = 70.f;
-        constexpr float thresDistSq = thresDist * thresDist;
+        const float thresDistSq = sep.threshold * sep.threshold;
         const float distSq = length_sq(op - p);
         if (distSq > thresDistSq)
           return;
-        sd += SteerDir{(p - op) * safeinv(distSq) * ms.speed * thresDist - vel};
+        sd += SteerDir{(p - op) * safeinv(distSq) * sep.force * ms.speed * sep.threshold - vel};
       });
     });
 
@@ -200,28 +199,5 @@ void steer::register_systems(flecs::world &ecs)
         sd += SteerDir{ovel * 0.8f};
       });
     });
-
-  ecs.system<SteerDir, const Velocity, const MoveSpeed, const Position, const Cohesion>()
-    .each([&](flecs::entity ent, SteerDir &sd, const Velocity &vel, const MoveSpeed &ms,
-              const Position &p, const Cohesion &)
-    {
-      Position avgPos{0.f, 0.f};
-      size_t count = 0;
-      otherPosQuery.each([&](flecs::entity oe, const Position &op)
-      {
-        if (oe == ent)
-          return;
-        constexpr float thresDist = 500.f;
-        constexpr float thresDistSq = thresDist * thresDist;
-        const float distSq = length_sq(op - p);
-        if (distSq > thresDistSq)
-          return;
-        count++;
-        avgPos += op;
-      });
-      constexpr float avgPosMult = 100.f;
-      sd += SteerDir{normalize(avgPos * safeinv(float(count)) - p) * avgPosMult - vel};
-    });
-
 }
 

@@ -11,7 +11,7 @@ namespace steer
     StFleer,
     Num
   };
-
+  flecs::entity create_separation(flecs::entity e, float threshold, float force);
   flecs::entity create_steer_beh(flecs::entity e, Type type);
   flecs::entity create_go_with_the_flow_er(flecs::entity e);
 
