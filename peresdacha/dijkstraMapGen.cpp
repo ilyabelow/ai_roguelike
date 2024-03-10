@@ -2,11 +2,16 @@
 #include "ecsTypes.h"
 #include "dungeonUtils.h"
 
+static flecs::query<const DungeonData> dungeonDataQuery;
+
+void dmaps::init_query_dungeon_data(flecs::world &ecs)
+{
+  dungeonDataQuery = ecs.query<const DungeonData>();
+}
+
 template<typename Callable>
 static void query_dungeon_data(flecs::world &ecs, Callable c)
 {
-  static auto dungeonDataQuery = ecs.query<const DungeonData>();
-
   dungeonDataQuery.each(c);
 }
 
@@ -102,6 +107,17 @@ void dmaps::gen_hive_pack_map(flecs::world &ecs, std::vector<float> &map)
     {
       map[pos.y * dd.width + pos.x] = 0.f;
     });
+    process_dmap(map, dd);
+  });
+}
+
+void dmaps::gen_to_target_map(flecs::world &ecs, std::vector<float> &map, int x, int y)
+{
+  query_dungeon_data(ecs, [&](const DungeonData &dd)
+  {
+    init_tiles(map, dd);
+    // for some reason I cannot access components of newly created target
+    map[y * dd.width + x] = 0.f;
     process_dmap(map, dd);
   });
 }

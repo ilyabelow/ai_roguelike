@@ -327,13 +327,21 @@ static void register_roguelike_systems(flecs::world &ecs)
           });
           ts.target.destruct();
         }
-        if (samePlace)
+        if (samePlace) {
+          ecs.entity("target_map").destruct();
           return;
+        }
         ts.target = ecs.entity()
           .set(Position{tile_x, tile_y})
           .set(Color{0xff, 0xff, 0xff, 0xff})
           .add<Target>()
           .add<TextureSource>(ecs.entity("target_tex"));
+
+        std::vector<float> targetMap;
+        dmaps::gen_to_target_map(ecs, targetMap, tile_x, tile_y);
+        ecs.entity("target_map")
+          .set(DijkstraMapData{targetMap})
+          .add<VisualiseMap>();
       }
     });
 }
@@ -367,6 +375,9 @@ void init_roguelike(flecs::world &ecs)
   ecs.entity("world")
     .set(TurnCounter{})
     .set(ActionLog{});
+
+  // query creation inside of another query does not work
+  dmaps::init_query_dungeon_data(ecs);
 }
 
 void init_dungeon(flecs::world &ecs, char *tiles, size_t w, size_t h)
@@ -614,7 +625,7 @@ void process_turn(flecs::world &ecs)
     //ecs.entity("flee_map").add<VisualiseMap>();
     ecs.entity("hive_follower_sum")
       .set(DmapWeights{{{"hive_map", {1.f, 1.f}}, {"approach_map", {1.8f, 0.8f}}}})
-      .add<VisualiseMap>();
+      ;
   }
 }
 
