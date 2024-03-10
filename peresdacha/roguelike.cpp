@@ -301,6 +301,29 @@ static void register_roguelike_systems(flecs::world &ecs)
       });
     });
 
+  const int step_count = 3;
+
+  ecs.system<const FlowMapData>()
+    .term<VisualiseMap>()
+    .each([](const FlowMapData &fmap)
+    {
+      dungeonDataQuery.each([&](const DungeonData &dd)
+      {
+        for (size_t y = 0; y < dd.height; ++y)
+          for (size_t x = 0; x < dd.width; ++x)
+          {
+            const Vector2 val = fmap.map[y * dd.width + x];
+            Vector2 origin = {(x + 0.5) * tile_size, (y + 0.5) * tile_size};
+            float length_mult = 1. / float(step_count) * 0.8;
+            Vector2 point = {origin.x + val.x * tile_size * length_mult, origin.y + val.y * tile_size * length_mult};
+            Color semi_red = {255, 0, 0, 64};
+            DrawCircle(origin.x, origin.y, 30, semi_red);
+            DrawLineEx(origin, point, 20, semi_red);
+            DrawCircle(point.x, point.y, 50, semi_red);
+          }
+      });
+    });
+
   ecs.system<TargetSelector>()
     .each([&](TargetSelector &ts)
     {
@@ -329,6 +352,7 @@ static void register_roguelike_systems(flecs::world &ecs)
         }
         if (samePlace) {
           ecs.entity("target_map").destruct();
+          ecs.entity("flow_map").destruct();
           return;
         }
         ts.target = ecs.entity()
@@ -341,6 +365,11 @@ static void register_roguelike_systems(flecs::world &ecs)
         dmaps::gen_to_target_map(ecs, targetMap, tile_x, tile_y);
         ecs.entity("target_map")
           .set(DijkstraMapData{targetMap})
+          .add<VisualiseMap>();
+
+        std::vector<Vector2> flowMap = dmaps::gen_flow_map(targetMap, ts.w, ts.h, step_count);
+        ecs.entity("flow_map")
+          .set(FlowMapData{flowMap})
           .add<VisualiseMap>();
       }
     });

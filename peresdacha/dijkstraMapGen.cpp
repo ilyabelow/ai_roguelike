@@ -122,3 +122,50 @@ void dmaps::gen_to_target_map(flecs::world &ecs, std::vector<float> &map, int x,
   });
 }
 
+struct int2
+{
+  int x, y;
+};
+
+int2 step_on_dijkstra_map(const std::vector<float> &map, int width, int height, int2 v)
+{
+  int2 res = v;
+  float minVal = map[v.y * width + v.x];
+  auto tryStep = [&](int x, int y)
+  {
+    if (x < 0 || y < 0 || x >= width || y >= height)
+      return;
+    const float val = map[y * width + x];
+    if (val < minVal)
+    {
+      minVal = val;
+      res.x = x;
+      res.y = y;
+    }
+  };
+  tryStep(v.x - 1, v.y + 0);
+  tryStep(v.x + 1, v.y + 0);
+  tryStep(v.x + 0, v.y - 1);
+  tryStep(v.x + 0, v.y + 1);
+  return res;
+}
+
+std::vector<Vector2> dmaps::gen_flow_map(std::vector<float> &in_map, int width, int height, int step_count)
+{
+  std::vector<Vector2> res(width * height);
+
+  for (int y = 0; y < height; ++y)
+    for (int x = 0; x < width; ++x)
+    {
+      if (in_map[y * width + x] < invalid_tile_value)
+      {
+        int2 v = {x, y};
+        for (int i = 0; i < step_count; ++i)
+          v = step_on_dijkstra_map(in_map, width, height, v);
+        res[y * width + x] = {float(v.x - x), float(v.y - y)};
+      } else {
+        res[y * width + x] = {0., 0.};
+      }
+    }
+  return res;
+}

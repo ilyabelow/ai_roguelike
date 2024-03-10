@@ -177,3 +177,7 @@ struct TargetSelector {
 };
 
 struct Target {};
+
+struct FlowMapData {
+  std::vector<Vector2> map;
+};
