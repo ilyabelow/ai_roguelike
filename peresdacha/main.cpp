@@ -56,7 +56,6 @@ int main(int /*argc*/, const char ** /*argv*/)
   SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
   while (!WindowShouldClose())
   {
-    process_turn(ecs);
     update_camera(camera, ecs);
 
     BeginDrawing();
@@ -64,7 +63,6 @@ int main(int /*argc*/, const char ** /*argv*/)
       BeginMode2D(camera);
         ecs.progress();
       EndMode2D();
-      print_stats(ecs);
       // Advance to next frame. Process submitted rendering primitives.
     EndDrawing();
   }

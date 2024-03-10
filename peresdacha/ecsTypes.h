@@ -3,57 +3,76 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-
-// TODO: make a lot of seprate files
-struct Position;
-struct MovePos;
-
-struct MovePos
-{
-  int x = 0;
-  int y = 0;
-
-  MovePos &operator=(const Position &rhs);
-};
+#include <math.h>
 
 struct Position
 {
-  int x = 0;
-  int y = 0;
-
-  Position &operator=(const MovePos &rhs);
+  float x = 0;
+  float y = 0;
 };
 
-inline Position &Position::operator=(const MovePos &rhs)
-{
-  x = rhs.x;
-  y = rhs.y;
-  return *this;
-}
+struct Velocity : public Position {};
+
+struct SteerDir : public Position {};
 
 inline Position operator-(const Position &lhs, const Position &rhs)
 {
   return Position{lhs.x - rhs.x, lhs.y - rhs.y};
 }
 
-inline MovePos &MovePos::operator=(const Position &rhs)
+inline Position operator+(const Position &lhs, const Position &rhs)
 {
-  x = rhs.x;
-  y = rhs.y;
-  return *this;
+  return {lhs.x + rhs.x, lhs.y + rhs.y};
 }
 
-inline bool operator==(const Position &lhs, const Position &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
-inline bool operator==(const Position &lhs, const MovePos &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
-inline bool operator==(const MovePos &lhs, const MovePos &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
-inline bool operator==(const MovePos &lhs, const Position &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
-inline bool operator!=(const Position &lhs, const Position &rhs) { return !(lhs == rhs); };
-
-
-struct PatrolPos
+inline Position &operator+=(Position &lhs, const Position &rhs)
 {
-  int x = 0;
-  int y = 0;
+  lhs = lhs + rhs;
+  return lhs;
+}
+
+inline Position operator*(const Position &lhs, const float scalar)
+{
+  return {lhs.x * scalar, lhs.y * scalar};
+}
+
+inline float safeinv(float v)
+{
+  return fabsf(v) > 1e-7f ? 1.f / v : v;
+}
+
+inline float length_sq(const Position &v)
+{
+  return v.x * v.x + v.y * v.y;
+}
+
+inline float length(const Position &v)
+{
+  return sqrtf(length_sq(v));
+}
+
+inline Position normalize(const Position &v)
+{
+  const float len = length(v);
+  return v * safeinv(len);
+}
+
+inline Position truncate(const Position &v, float len)
+{
+  const float l = length(v);
+  if (l > len)
+    return v * (len / l);
+  return v;
+}
+
+
+inline bool operator==(const Position &lhs, const Position &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
+inline bool operator!=(const Position &lhs, const Position &rhs) { return !(lhs == rhs); }
+
+
+struct MoveSpeed
+{
+  float speed = 0.f;
 };
 
 struct Hitpoints
