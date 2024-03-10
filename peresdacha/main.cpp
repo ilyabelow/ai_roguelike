@@ -5,23 +5,24 @@
 #include "ecsTypes.h"
 #include "roguelike.h"
 #include "dungeonGen.h"
+#include <cmath>
 
 static void update_camera(Camera2D &cam, flecs::world &ecs)
 {
-  static auto playerQuery = ecs.query<const Position, const IsPlayer>();
-
-  playerQuery.each([&](const Position &pos, const IsPlayer &)
+  if (IsMouseButtonDown(MOUSE_RIGHT_BUTTON))
   {
-    cam.target.x += (pos.x * tile_size - cam.target.x) * 0.1f;
-    cam.target.y += (pos.y * tile_size - cam.target.y) * 0.1f;
-  });
+    Vector2 delta = GetMouseDelta();
+    cam.target.x -= delta.x / cam.zoom;
+    cam.target.y -= delta.y / cam.zoom;
+  }
+  cam.zoom *= std::pow(2.,  GetMouseWheelMove() * 0.5);
 }
 
 int main(int /*argc*/, const char ** /*argv*/)
 {
   int width = 1920;
   int height = 1080;
-  InitWindow(width, height, "w3 AI MIPT");
+  InitWindow(width, height, "peresda AI MIPT");
 
   const int scrWidth = GetMonitorWidth(0);
   const int scrHeight = GetMonitorHeight(0);
@@ -33,9 +34,10 @@ int main(int /*argc*/, const char ** /*argv*/)
   }
 
   flecs::world ecs;
+  // DUNGeon :)
+  constexpr size_t dungWidth = 50;
+  constexpr size_t dungHeight = 50;
   {
-    constexpr size_t dungWidth = 50;
-    constexpr size_t dungHeight = 50;
     char *tiles = new char[dungWidth * dungHeight];
     gen_drunk_dungeon(tiles, dungWidth, dungHeight);
     init_dungeon(ecs, tiles, dungWidth, dungHeight);
@@ -43,10 +45,10 @@ int main(int /*argc*/, const char ** /*argv*/)
   init_roguelike(ecs);
 
   Camera2D camera = { {0, 0}, {0, 0}, 0.f, 1.f };
-  camera.target = Vector2{ 0.f, 0.f };
+  camera.target = Vector2{ dungWidth * 0.5f * tile_size, dungHeight * 0.5f * tile_size};
   camera.offset = Vector2{ width * 0.5f, height * 0.5f };
   camera.rotation = 0.f;
-  camera.zoom = 0.125f;
+  camera.zoom = 0.04;
 
   SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
   while (!WindowShouldClose())
